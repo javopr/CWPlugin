@@ -1,10 +1,10 @@
 {
   "name": "cwplugin",
-  "version": "0.1.0",
+  "version": "1.1.1",
   "description": "Busca tickets de ConnectWise Manage y registra entradas de tiempo directamente desde una conversacion de Claude Code.",
   "author": {
-    "name": "Javier",
-    "email": "javopr@gmail.com"
+    "name": "Javier Morales",
+    "email": "javier.morales@intwo.cloud"
   },
   "homepage": "https://github.com/javopr/CWPlugin",
   "repository": "https://github.com/javopr/CWPlugin",
