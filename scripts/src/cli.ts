@@ -152,7 +152,8 @@ async function main(): Promise<void> {
       return;
     }
     case "list-work-types": {
-      printSuccess(await listWorkTypes());
+      const filter = (args as { filter?: string }).filter;
+      printSuccess(await listWorkTypes(filter));
       return;
     }
     case "test-connection": {

@@ -75,10 +75,14 @@ lenguaje natural, en el mismo idioma en que te escribió.
   `note` (string), `date` (`YYYY-MM-DD`), `startTime`/`endTime` (`HH:mm`), `workRole`
   (string — debe coincidir EXACTO con un nombre real, ver `list-work-roles`),
   `workType` (string — idem, ver `list-work-types`), `billable` (boolean).
-- `list-work-roles` / `list-work-types` — devuelven los Work Roles/Work Types reales
-  y activos del tenant (`{id, name}`). Úsalos para mostrarle opciones al usuario en
-  vez de asumir nombres como "Engineer" — esos valores varían por tenant y dan error
-  `NotFound` si no existen exactamente así.
+- `list-work-roles` — devuelve TODOS los Work Roles activos del tenant (`{id, name}`).
+  Úsalo para mostrarle opciones al usuario en vez de asumir nombres como "Engineer"
+  — esos valores varían por tenant y dan error `NotFound` si no existen exactamente
+  así.
+- `list-work-types` — igual, pero acepta un arg opcional `filter` (string,
+  coincidencia parcial case-insensitive sobre el nombre) porque puede haber muchos
+  (100+). La respuesta incluye `count` (cuántos calzan con el filtro),
+  `totalCount` (cuántos hay en total sin filtrar), y `filterApplied`.
 - `test-connection` — valida que las credenciales guardadas funcionan.
 
 ## Flujo de búsqueda de tickets (dos niveles)
@@ -127,18 +131,25 @@ lenguaje natural, en el mismo idioma en que te escribió.
 2. Para cada campo que falte, pregúntalo en la conversación normal (este skill no
    puede invocar formularios; solo puede conversar). Puedes agrupar varias preguntas
    en un mismo mensaje si faltan varios campos.
+   **La nota (`note`) NUNCA la inventes ni la resumas por tu cuenta** — es texto que
+   describe el trabajo realizado y solo el usuario lo puede proveer. Si no la dio en
+   su mensaje original, pregúntasela explícitamente como cualquier otro campo
+   faltante; no generes un texto genérico ("trabajo realizado en el ticket...") ni
+   asumas el contenido a partir del ticket o la conversación.
 3. **Para work role y work type, nunca le pidas al usuario que escriba el nombre a
    ciegas** — llama a `list-work-roles`/`list-work-types` y deja que elija de la
    lista real:
    - **`list-work-roles`**: normalmente son pocos (el tenant de prueba tenía 19).
      **Muestra la lista COMPLETA siempre**, nunca la recortes.
    - **`list-work-types`**: puede haber muchos (el tenant de prueba tenía 114, la
-     mayoría variantes de "Travel - <ciudad>"). Aquí sí puedes acortar: si el
-     usuario ya dio una pista del tipo (ej. "remoto", "onsite"), filtra la lista
-     por esa palabra y muéstrale solo las que calzan; si no dio ninguna pista,
-     muéstrale las más comunes/genéricas primero (ej. las que no empiezan con
-     "Travel -") y ofrece buscar por palabra clave si no encuentra la que busca.
-     Nunca inventes ni asumas un work type — siempre debe venir de esta lista.
+     mayoría variantes de "Travel - <ciudad>"). Si el usuario ya dio una pista del
+     tipo (ej. "remoto", "onsite"), llama a `list-work-types` con `filter` en esa
+     palabra. Si no dio ninguna pista, llama a `list-work-types` sin filtro,
+     muéstrale un primer grupo razonable (ej. las que no empiezan con "Travel -")
+     y **dile explícitamente cuántas hay en total** (`totalCount`) y que puede
+     pedirte ver todas o buscar por palabra clave si no encuentra la que busca —
+     nunca muestres una lista parcial sin decir que es parcial. Nunca inventes ni
+     asumas un work type — siempre debe venir de esta lista.
    - Si el usuario ya mencionó un nombre de role o type, verifica que coincida
      EXACTO con uno real de la lista antes de continuar; si no coincide, muéstrale
      las opciones más parecidas de la lista real (nunca lo pases sin verificar).

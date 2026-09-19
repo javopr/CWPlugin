@@ -133,7 +133,8 @@ async function main() {
             return;
         }
         case "list-work-types": {
-            printSuccess(await listWorkTypes());
+            const filter = args.filter;
+            printSuccess(await listWorkTypes(filter));
             return;
         }
         case "test-connection": {
