@@ -1,7 +1,7 @@
 # Guía de instalación — cwplugin
 
 Esta guía es para usuarios finales que quieren instalar y usar el plugin. Si vas a
-modificar el código, ve el [README](../README.md) principal (sección "Desarrollo").
+modificar el código, ve el [README](../../README.md) principal (sección "Desarrollo").
 
 ## Requisitos
 

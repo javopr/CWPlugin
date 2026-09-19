@@ -12,7 +12,7 @@ const MIN_NODE_MAJOR = 18;
 function checkNodeVersion() {
     const major = Number(process.versions.node.split(".")[0]);
     if (major < MIN_NODE_MAJOR) {
-        printError(new CwApiError("UNKNOWN_ERROR", `Este CLI requiere Node.js ${MIN_NODE_MAJOR}+ (version actual: ${process.versions.node}).`));
+        printError(new CwApiError("UNKNOWN_ERROR", `This CLI requires Node.js ${MIN_NODE_MAJOR}+ (current version: ${process.versions.node}).`));
         process.exit(1);
     }
 }
@@ -29,7 +29,7 @@ function parseJsonFrom(raw, sourceLabel) {
         return JSON.parse(raw);
     }
     catch {
-        printError(new CwApiError("VALIDATION_ERROR", `El JSON recibido via ${sourceLabel} no es valido.`));
+        printError(new CwApiError("VALIDATION_ERROR", `The JSON received via ${sourceLabel} is not valid.`));
         process.exit(1);
     }
 }
@@ -86,13 +86,13 @@ function printError(err) {
     process.stderr.write(JSON.stringify({ error: { code: "UNKNOWN_ERROR", message: err?.message ?? String(err) } }, null, 2) + "\n");
 }
 async function promptForConfigureArgs() {
-    console.log("Configuracion de ConnectWise Manage para cwplugin.");
-    console.log("Los datos se guardan cifrados en el almacen de credenciales de tu sistema operativo.\n");
-    const fqdn = await promptText("FQDN de ConnectWise (ej. na.myconnectwise.net): ");
+    console.log("ConnectWise Manage configuration for cwplugin.");
+    console.log("Your data is stored encrypted in your operating system's credential store.\n");
+    const fqdn = await promptText("ConnectWise FQDN (e.g. connect.intwo.cloud): ");
     const companyId = await promptText("Company ID: ");
-    const clientId = await promptText("Client ID (developer.connectwise.com): ");
-    const publicKey = await promptSecret("Public Key (no se mostrara en pantalla): ");
-    const privateKey = await promptSecret("Private Key (no se mostrara en pantalla): ");
+    const clientId = await promptText("Client ID (ask developer for clientId): ");
+    const publicKey = await promptText("Public Key: ");
+    const privateKey = await promptSecret("Private Key (will not be shown on screen): ");
     return { fqdn, companyId, clientId, publicKey, privateKey };
 }
 async function main() {
@@ -118,7 +118,7 @@ async function main() {
         case "get-ticket": {
             const id = Number(args.id);
             if (!id)
-                throw new CwApiError("VALIDATION_ERROR", "Falta el campo 'id' del ticket.");
+                throw new CwApiError("VALIDATION_ERROR", "Missing ticket 'id' field.");
             const result = await getTicket(id);
             printSuccess(result);
             return;
@@ -129,7 +129,8 @@ async function main() {
             return;
         }
         case "list-work-roles": {
-            printSuccess(await listWorkRoles());
+            const ticketId = args.ticketId;
+            printSuccess(await listWorkRoles(ticketId));
             return;
         }
         case "list-work-types": {
@@ -144,10 +145,15 @@ async function main() {
             return;
         }
         default:
-            throw new CwApiError("VALIDATION_ERROR", `Subcomando desconocido: "${subcommand}". Subcomandos validos: configure, reset, search-tickets, get-ticket, add-time-entry, list-work-roles, list-work-types, test-connection.`);
+            throw new CwApiError("VALIDATION_ERROR", `Unknown subcommand: "${subcommand}". Valid subcommands: configure, reset, search-tickets, get-ticket, add-time-entry, list-work-roles, list-work-types, test-connection.`);
     }
 }
 main().catch((err) => {
     printError(err);
-    process.exit(1);
+    // Not process.exit(1): forcing an immediate exit right after a failed HTTP
+    // request (e.g. two 404s in a row, as resolveTicket produces for an id that
+    // exists in neither /service/tickets nor /project/tickets) can race libuv's
+    // socket teardown on Windows and crash the process instead of printing the
+    // error. Setting exitCode and letting Node drain naturally avoids that.
+    process.exitCode = 1;
 });

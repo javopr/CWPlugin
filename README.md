@@ -3,9 +3,10 @@
 Plugin de Claude Code para buscar tickets de ConnectWise Manage (Service y Project) y
 registrar entradas de tiempo, directamente desde una conversación.
 
-Documentación adicional en [`docs/`](docs/):
-[Guía de instalación](docs/INSTALL.md) ·
-[Referencia técnica de la API de ConnectWise](docs/CONNECTWISE-API.md) ·
+Documentación adicional en [`docs/`](docs/) (cada versión tiene su propia carpeta;
+los enlaces de abajo apuntan a la versión vigente, v1.1.2):
+[Guía de instalación](docs/v1.1.2/INSTALL.md) ·
+[Referencia técnica de la API de ConnectWise](docs/v1.1.2/CONNECTWISE-API.md) ·
 [Changelog](docs/CHANGELOG.md)
 
 ## Requisitos
@@ -25,7 +26,7 @@ Documentación adicional en [`docs/`](docs/):
 ## Instalación
 
 El mecanismo exacto depende de dónde uses Claude (app de escritorio, VS Code, o el
-CLI de terminal) — ver la [guía de instalación completa](docs/INSTALL.md) con los
+CLI de terminal) — ver la [guía de instalación completa](docs/v1.1.2/INSTALL.md) con los
 pasos verificados para cada uno. Resumen para el CLI de terminal:
 
 ```
@@ -100,7 +101,7 @@ Node.js, sin instalar TypeScript.
 Todo el comportamiento de la API (sintaxis de `conditions=`, formato de
 `/time/entries`, listas de work roles/types, etc.) fue verificado end-to-end contra
 un tenant real, no solo contra documentación pública — ver el detalle en
-[`docs/CONNECTWISE-API.md`](docs/CONNECTWISE-API.md) y la bitácora de bugs
+[`docs/v1.1.2/CONNECTWISE-API.md`](docs/v1.1.2/CONNECTWISE-API.md) y la bitácora de bugs
 encontrados en [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 [`skills/connectwise/reference.md`](skills/connectwise/reference.md) es la versión
 corta que usa Claude en tiempo de ejecución.

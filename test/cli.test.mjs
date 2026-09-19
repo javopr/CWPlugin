@@ -83,6 +83,22 @@ test("search-tickets combines criteria and returns matches", async () => {
   assert.equal(result.json.tickets[0].id, 1001);
 });
 
+test("search-tickets recordType 'project' queries the dedicated /project/tickets endpoint", async () => {
+  const result = await runCli("search-tickets", { company: "acme", recordType: "project" });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.json.count, 1);
+  assert.equal(result.json.tickets[0].id, 1002);
+  assert.equal(result.json.tickets[0].recordType, "ProjectTicket");
+});
+
+test("search-tickets recordType 'any' (default) searches both service and project tickets", async () => {
+  const result = await runCli("search-tickets", { company: "acme" });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.json.count, 2);
+  const ids = result.json.tickets.map((t) => t.id).sort();
+  assert.deepEqual(ids, [1001, 1002]);
+});
+
 test("search-tickets level 2: scans notes of the last N candidate tickets", async () => {
   // ConnectWise has no flat "initialDescription" ticket field — it's the first note
   // with detailDescriptionFlag=true, so this filters client-side over notes of the
@@ -141,6 +157,58 @@ test("add-time-entry succeeds end-to-end against the mock server", async () => {
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.json.timeEntry.chargeToType, "ServiceTicket");
   assert.equal(result.json.timeEntry.billableOption, "Billable");
+  assert.equal(result.json.timeEntry.addToDetailDescriptionFlag, true);
+  assert.equal(result.json.timeEntry.addToInternalAnalysisFlag, false);
+  assert.equal(result.json.timeEntry.addToResolutionFlag, false);
+});
+
+test("add-time-entry with noteType 'Internal' sets the matching flag, not Discussion", async () => {
+  const result = await runCli("add-time-entry", {
+    ticketId: 1001,
+    note: "Nota interna de prueba",
+    date: "2026-09-18",
+    startTime: "09:00",
+    endTime: "11:00",
+    workRole: "Engineer",
+    workType: "Remote Support",
+    billable: false,
+    noteType: "Internal",
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.json.timeEntry.addToDetailDescriptionFlag, false);
+  assert.equal(result.json.timeEntry.addToInternalAnalysisFlag, true);
+  assert.equal(result.json.timeEntry.addToResolutionFlag, false);
+});
+
+test("add-time-entry rejects an invalid noteType", async () => {
+  const result = await runCli("add-time-entry", {
+    ticketId: 1001,
+    note: "test",
+    date: "2026-09-18",
+    startTime: "09:00",
+    endTime: "11:00",
+    workRole: "Engineer",
+    workType: "Remote Support",
+    billable: true,
+    noteType: "Bogus",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.json.error.code, "VALIDATION_ERROR");
+});
+
+test("list-work-roles without ticketId returns the tenant-wide list", async () => {
+  const result = await runCli("list-work-roles");
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const names = result.json.workRoles.map((r) => r.name).sort();
+  assert.deepEqual(names, ["Engineer", "Manager"]);
+});
+
+test("list-work-roles with ticketId scopes to that ticket's Location, excluding roles not valid there", async () => {
+  const result = await runCli("list-work-roles", { ticketId: 1001 });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.json.scopedToTicketId, 1001);
+  const names = result.json.workRoles.map((r) => r.name);
+  assert.deepEqual(names, ["Engineer"]);
 });
 
 test("reset clears configuration", async () => {

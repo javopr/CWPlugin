@@ -7,11 +7,20 @@ const MAX_NOTE_SCAN_LIMIT = 50;
 // a monitoring integration) accumulate hundreds/thousands of notes over time —
 // never paginate through a ticket's full note history just to find this one.
 const NOTE_LOOKUP_PAGE_SIZE = 200;
+const SERVICE_SOURCE = { kind: "service", path: "/service/tickets" };
+const PROJECT_SOURCE = { kind: "project", path: "/project/tickets" };
+function sourcesFor(recordType) {
+    if (recordType === "service")
+        return [SERVICE_SOURCE];
+    if (recordType === "project")
+        return [PROJECT_SOURCE];
+    return [SERVICE_SOURCE, PROJECT_SOURCE];
+}
 function escapeConditionValue(value) {
     return value.replace(/'/g, "\\'");
 }
 // Level 1 filters: fields ConnectWise can filter server-side on the ticket
-// list itself (fast, cheap, one request).
+// list itself (fast, cheap, one request per source).
 function buildConditions(args) {
     const clauses = [];
     if (args.ticketId !== undefined) {
@@ -26,25 +35,22 @@ function buildConditions(args) {
     if (args.status) {
         clauses.push(`status/name contains '${escapeConditionValue(args.status)}'`);
     }
-    if (args.recordType && args.recordType !== "any") {
-        const recordType = args.recordType === "service" ? "ServiceTicket" : "ProjectTicket";
-        clauses.push(`recordType='${recordType}'`);
-    }
     return clauses.join(" and ");
 }
-function toSummary(raw) {
+function toSummary(raw, source) {
+    const recordType = raw.recordType ?? (source.kind === "project" ? (raw.isIssueFlag ? "ProjectIssue" : "ProjectTicket") : "");
     return {
         id: raw.id,
         summary: raw.summary,
         company: raw.company?.name ?? raw.company?.identifier ?? "",
         status: raw.status?.name ?? "",
         board: raw.board?.name ?? "",
-        recordType: raw.recordType ?? "",
+        recordType,
     };
 }
-async function matchesInitialDescription(config, secrets, ticketId, needle) {
+async function matchesInitialDescription(config, secrets, source, ticketId, needle) {
     const notes = await request(config, secrets, {
-        path: `/service/tickets/${ticketId}/notes`,
+        path: `${source.path}/${ticketId}/notes`,
         query: { pageSize: NOTE_LOOKUP_PAGE_SIZE },
     });
     const initialNote = notes.find((n) => n.detailDescriptionFlag);
@@ -55,33 +61,40 @@ async function matchesInitialDescription(config, secrets, ticketId, needle) {
 export async function searchTickets(args) {
     const { config, secrets } = loadContext();
     const conditions = buildConditions(args);
-    // Level 1: ticketId / company / summary / status / recordType — a single,
-    // fast, server-side filtered request.
+    const sources = sourcesFor(args.recordType);
+    // Level 1: ticketId / company / summary / status — a single, fast,
+    // server-side filtered request per source (Service Desk and/or Projects).
     if (!args.initialDescription) {
-        const raw = await request(config, secrets, {
-            path: "/service/tickets",
-            query: { conditions: conditions || undefined, pageSize: 100 },
-        });
-        const tickets = raw.map(toSummary);
+        const tickets = [];
+        for (const source of sources) {
+            const raw = await request(config, secrets, {
+                path: source.path,
+                query: { conditions: conditions || undefined, pageSize: 100 },
+            });
+            tickets.push(...raw.map((t) => toSummary(t, source)));
+        }
         return { ok: true, count: tickets.length, tickets };
     }
     // Level 2: search the initial note text (ConnectWise has no server-side
     // field for this — see reference.md). Explicit and bounded: only scans the
     // `noteScanLimit` most recent tickets matching the level-1 filters (default
-    // 10, capped at 50), never the whole tenant. This is meant to run only when
-    // the user asks to expand a search into notes, e.g. after a level-1 search
-    // came back empty.
+    // 10, capped at 50) per source, never the whole tenant. This is meant to run
+    // only when the user asks to expand a search into notes, e.g. after a
+    // level-1 search came back empty.
     const limit = Math.min(args.noteScanLimit ?? DEFAULT_NOTE_SCAN_LIMIT, MAX_NOTE_SCAN_LIMIT);
-    const candidates = await request(config, secrets, {
-        path: "/service/tickets",
-        query: { conditions: conditions || undefined, orderBy: "id desc", pageSize: limit },
-    });
-    const matches = [];
-    for (const ticket of candidates) {
-        if (await matchesInitialDescription(config, secrets, ticket.id, args.initialDescription)) {
-            matches.push(ticket);
+    const tickets = [];
+    let scannedTicketCount = 0;
+    for (const source of sources) {
+        const candidates = await request(config, secrets, {
+            path: source.path,
+            query: { conditions: conditions || undefined, orderBy: "id desc", pageSize: limit },
+        });
+        scannedTicketCount += candidates.length;
+        for (const ticket of candidates) {
+            if (await matchesInitialDescription(config, secrets, source, ticket.id, args.initialDescription)) {
+                tickets.push(toSummary(ticket, source));
+            }
         }
     }
-    const tickets = matches.map(toSummary);
-    return { ok: true, count: tickets.length, tickets, scannedTicketCount: candidates.length };
+    return { ok: true, count: tickets.length, tickets, scannedTicketCount };
 }

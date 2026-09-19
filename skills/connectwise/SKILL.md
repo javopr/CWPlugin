@@ -74,11 +74,19 @@ lenguaje natural, en el mismo idioma en que te escribió.
 - `add-time-entry` — crea una entrada de tiempo. Args requeridos: `ticketId` (number),
   `note` (string), `date` (`YYYY-MM-DD`), `startTime`/`endTime` (`HH:mm`), `workRole`
   (string — debe coincidir EXACTO con un nombre real, ver `list-work-roles`),
-  `workType` (string — idem, ver `list-work-types`), `billable` (boolean).
-- `list-work-roles` — devuelve TODOS los Work Roles activos del tenant (`{id, name}`).
-  Úsalo para mostrarle opciones al usuario en vez de asumir nombres como "Engineer"
-  — esos valores varían por tenant y dan error `NotFound` si no existen exactamente
-  así.
+  `workType` (string — idem, ver `list-work-types`), `billable` (boolean). Opcional:
+  `noteType` (`"Discussion"` | `"Internal"` | `"Resolution"` — a qué tipo de nota
+  del ticket corresponde esta entrada; default `"Discussion"`, igual que
+  ConnectWise). Verificado contra un time entry real: estas tres opciones son
+  literalmente los checkboxes que ConnectWise muestra al entrar tiempo.
+- `list-work-roles` — devuelve los Work Roles disponibles (`{id, name}`). **Pásale
+  siempre `ticketId`** (el ticket al que se le va a entrar tiempo): ConnectWise
+  restringe los roles seleccionables por la **Location** del ticket, no por el
+  tenant completo — verificado contra un tenant real, la lista sin acotar por
+  ticket puede incluir roles que el usuario ni siquiera ve como opción en su
+  propio ConnectWise (ej. roles de otra location/país). Sin `ticketId` cae de
+  vuelta a la lista completa del tenant (menos precisa, solo como respaldo si aún
+  no hay un ticket elegido).
 - `list-work-types` — igual, pero acepta un arg opcional `filter` (string,
   coincidencia parcial case-insensitive sobre el nombre) porque puede haber muchos
   (100+). La respuesta incluye `count` (cuántos calzan con el filtro),
@@ -97,12 +105,29 @@ lenguaje natural, en el mismo idioma en que te escribió.
    completo.
 4. Si `count > 1`: muestra una lista compacta en tabla markdown (ID | Company |
    Resumen | Status | Board) y pide que el usuario elija cuál.
-5. Si `count === 0`: dile al usuario explícitamente que no hubo resultados a nivel 1.
-   Si el usuario mencionó texto que suena a contenido de la descripción/nota inicial
-   (no un criterio de nivel 1), **pregúntale si quiere que revises las notas de los
-   últimos N tickets** que cumplan los demás criterios (por defecto los últimos 10;
-   puedes ofrecer un número distinto si lo pide) — no lo hagas automáticamente sin
-   preguntar, porque implica revisar tickets uno por uno y toma más tiempo.
+5. Si `count === 0` (o pocos resultados) y el criterio venía de una palabra de
+   **concepto/tema** en `summary` (ej. "migración", "diseño", "facturación" — no un
+   ID ni un nombre propio): el filtro `summary contains` de ConnectWise es
+   **literal**, y los tickets de este tenant suelen estar redactados en inglés
+   aunque el usuario pregunte en español. Antes de decirle que no hay resultados:
+   - Vuelve a llamar a `search-tickets` probando la traducción al inglés del término
+     (ej. "migración" → "migration"), y viceversa si el usuario preguntó en inglés.
+   - Si tiene sentido, prueba también 1-2 sinónimos o formas relacionadas obvias
+     (ej. "migración" → "migrate"/"migrating"; "diseño" → "design"). No hace falta
+     una lista exhaustiva, solo las variantes más razonables.
+   - Combina y deduplica por `id` los resultados de todas las variantes que sí
+     encontraron algo, y preséntalos juntos como si fuera una sola búsqueda — no le
+     muestres al usuario cada intento por separado, ni le pidas permiso para
+     probar otro idioma/sinónimo, hazlo directamente como parte de responder su
+     pregunta.
+   - Solo si ninguna variante razonable encuentra nada, dile explícitamente que no
+     hubo resultados a nivel 1 (mencionando qué términos probaste). Si el usuario
+     mencionó texto que suena a contenido de la descripción/nota inicial (no un
+     criterio de nivel 1), **pregúntale si quiere que revises las notas de los
+     últimos N tickets** que cumplan los demás criterios (por defecto los últimos
+     10; puedes ofrecer un número distinto si lo pide) — no lo hagas
+     automáticamente sin preguntar, porque implica revisar tickets uno por uno y
+     toma más tiempo.
 
 **Nivel 2 — solo si el usuario confirma que quiere buscar en notas:**
 
@@ -119,18 +144,31 @@ lenguaje natural, en el mismo idioma en que te escribió.
 **Detalle de un ticket (ambos niveles):**
 
 9. Cuando el usuario pida "detalle", "analiza", o similar sobre un ticket específico,
-   llama a `get-ticket` y presenta la información organizada en secciones: Resumen,
-   Status/Board, Company/Contacto, Notas (de más reciente a más antigua; si son
-   muchas, resume las más antiguas y detalla las recientes), Entradas de tiempo,
-   Agreement.
+   llama a `get-ticket` (que ya trae **todas** las notas y **todas** las entradas de
+   tiempo, paginadas completas — nunca un subconjunto) y presenta la información
+   organizada en secciones: Resumen, Status/Board, Company/Contacto, Notas (de más
+   reciente a más antigua), Entradas de tiempo, Agreement.
+   - **Umbral de "muchas notas" para la presentación** (esto es solo cómo se
+     muestran, el dato completo ya está disponible): con **100 notas o menos**,
+     detalla todas completas. Con **más de 100**, detalla las 100 más recientes y
+     resume el resto (agrupado, ej. por rango de fechas o autor) — nunca omitas
+     silenciosamente notas antiguas sin decir que las resumiste.
 
 ## Flujo de entrada de tiempo
 
 1. Extrae del mensaje del usuario lo que ya haya dado: ticket, nota, fecha, hora de
-   inicio, hora de fin, work role, work type, billable (sí/no).
-2. Para cada campo que falte, pregúntalo en la conversación normal (este skill no
-   puede invocar formularios; solo puede conversar). Puedes agrupar varias preguntas
-   en un mismo mensaje si faltan varios campos.
+   inicio, hora de fin, work role, work type, billable (sí/no), y opcionalmente
+   noteType (Discussion/Internal/Resolution — si no lo menciona, usa el default
+   "Discussion" sin preguntar, es el mismo default de ConnectWise).
+2. Para cada campo que falte, pregúntalo. **Usa el selector de opciones
+   (AskUserQuestion) en vez de listas de texto plano** cuando haya opciones
+   discretas para elegir (billable sí/no, noteType, work role, work type) — no
+   dumps de texto largo. Ese selector solo admite 4 opciones por pregunta; cuando
+   una lista real tenga más de 4 (work roles, work types), muéstralas en tandas de
+   4 en el orden en que las devuelve la API — **nunca inventes cuáles son "las más
+   probables"** para priorizar el orden, ya causó un caso real donde se sugirió
+   una opción que el usuario ni tenía disponible. Puedes agrupar varias preguntas
+   independientes en una sola llamada al selector (hasta 4 preguntas a la vez).
    **La nota (`note`) NUNCA la inventes ni la resumas por tu cuenta** — es texto que
    describe el trabajo realizado y solo el usuario lo puede proveer. Si no la dio en
    su mensaje original, pregúntasela explícitamente como cualquier otro campo
@@ -139,8 +177,12 @@ lenguaje natural, en el mismo idioma en que te escribió.
 3. **Para work role y work type, nunca le pidas al usuario que escriba el nombre a
    ciegas** — llama a `list-work-roles`/`list-work-types` y deja que elija de la
    lista real:
-   - **`list-work-roles`**: normalmente son pocos (el tenant de prueba tenía 19).
-     **Muestra la lista COMPLETA siempre**, nunca la recortes.
+   - **`list-work-roles`**: llama con `{"ticketId": <el ticket>}` para acotar a los
+     roles válidos de la Location de ese ticket (ver arriba) — normalmente son
+     pocos (16 en un caso real verificado). **Muestra la lista COMPLETA siempre**,
+     nunca la recortes, y **no adivines cuáles son "las más probables"** — no
+     tienes forma de saberlo mejor que la lista real, y arriesgas sugerir algo que
+     el usuario ni ve como opción en su ConnectWise.
    - **`list-work-types`**: puede haber muchos (el tenant de prueba tenía 114, la
      mayoría variantes de "Travel - <ciudad>"). Si el usuario ya dio una pista del
      tipo (ej. "remoto", "onsite"), llama a `list-work-types` con `filter` en esa
@@ -155,9 +197,9 @@ lenguaje natural, en el mismo idioma en que te escribió.
      las opciones más parecidas de la lista real (nunca lo pases sin verificar).
 4. Antes de llamar a `add-time-entry`, confirma con el usuario un resumen de una
    línea (ej. "2h en el ticket #12345, 2026-09-18 09:00–11:00, no facturable, role
-   Incident Handler, tipo Remote-Standard, nota: '...' — ¿confirmas?"). Es una
-   escritura con efecto secundario real en ConnectWise: siempre pide confirmación
-   explícita antes de ejecutar.
+   Incident Handler, tipo Remote-Standard, nota tipo Discussion, nota: '...' —
+   ¿confirmas?"). Es una escritura con efecto secundario real en ConnectWise:
+   siempre pide confirmación explícita antes de ejecutar.
 5. Llama a `add-time-entry` solo después de la confirmación. Si el ticket no permite
    entradas de tiempo por su status actual (ConnectWise devuelve un mensaje explícito
    al respecto), dile al usuario que el status del ticket lo bloquea y que debe

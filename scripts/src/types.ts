@@ -26,6 +26,8 @@ export interface SearchTicketsArgs {
   noteScanLimit?: number;
 }
 
+export type NoteType = "Discussion" | "Internal" | "Resolution";
+
 export interface AddTimeEntryArgs {
   ticketId: number;
   note: string;
@@ -35,6 +37,8 @@ export interface AddTimeEntryArgs {
   workRole: string;
   workType: string;
   billable: boolean;
+  /** Which ticket note type this entry's note becomes. Defaults to "Discussion" (matches ConnectWise's own default). */
+  noteType?: NoteType;
 }
 
 export interface ConfigureArgs {

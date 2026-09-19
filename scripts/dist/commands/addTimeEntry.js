@@ -1,6 +1,19 @@
 import { request } from "../cwClient.js";
 import { loadContext } from "../context.js";
 import { CwApiError } from "../cwClient.js";
+import { resolveTicket } from "../ticketResolver.js";
+const VALID_NOTE_TYPES = ["Discussion", "Internal", "Resolution"];
+// Verified against a real tenant's time entries: the note-type checkboxes shown
+// in ConnectWise's UI when logging time map to these three flags on the POST
+// body (same three flags as a ticket note's detailDescription/internalAnalysis/
+// resolution). ConnectWise defaults to Discussion when none is set explicitly.
+function noteTypeFlags(noteType) {
+    return {
+        addToDetailDescriptionFlag: noteType === "Discussion",
+        addToInternalAnalysisFlag: noteType === "Internal",
+        addToResolutionFlag: noteType === "Resolution",
+    };
+}
 const REQUIRED_FIELDS = [
     "ticketId",
     "note",
@@ -33,11 +46,11 @@ function toIsoDateTime(date, time) {
 }
 export async function addTimeEntry(args) {
     validate(args);
+    if (args.noteType !== undefined && !VALID_NOTE_TYPES.includes(args.noteType)) {
+        throw new CwApiError("VALIDATION_ERROR", `noteType invalido: "${args.noteType}". Valores validos: ${VALID_NOTE_TYPES.join(", ")}`);
+    }
     const { config, secrets } = loadContext();
-    const ticket = await request(config, secrets, {
-        path: `/service/tickets/${args.ticketId}`,
-    });
-    const chargeToType = ticket.recordType === "ProjectTicket" ? "ProjectTicket" : "ServiceTicket";
+    const { chargeToType } = await resolveTicket(config, secrets, args.ticketId);
     const body = {
         chargeToType,
         chargeToId: args.ticketId,
@@ -47,6 +60,7 @@ export async function addTimeEntry(args) {
         workRole: { name: args.workRole },
         workType: { name: args.workType },
         billableOption: args.billable ? "Billable" : "DoNotBill",
+        ...noteTypeFlags(args.noteType ?? "Discussion"),
     };
     const created = await request(config, secrets, {
         method: "POST",

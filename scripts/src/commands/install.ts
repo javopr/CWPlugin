@@ -8,7 +8,7 @@ export async function configure(args: ConfigureArgs): Promise<unknown> {
 
   for (const [field, value] of Object.entries({ fqdn, companyId, clientId, publicKey, privateKey })) {
     if (!value || !value.trim()) {
-      throw new CwApiError("VALIDATION_ERROR", `Falta el campo requerido: ${field}`);
+      throw new CwApiError("VALIDATION_ERROR", `Missing required field: ${field}`);
     }
   }
 
@@ -34,13 +34,13 @@ export async function configure(args: ConfigureArgs): Promise<unknown> {
     apiBase,
     usedFallbackSecretStorage: result.usedFallback,
     message: result.usedFallback
-      ? "Credenciales guardadas. Nota: no se encontro un almacen de credenciales del sistema operativo (secret-tool); se uso un archivo local con permisos restringidos como respaldo."
-      : "Credenciales guardadas en el almacen nativo del sistema operativo.",
+      ? "Credentials saved. Note: no operating system credential store was found (secret-tool); a local file with restricted permissions was used as a fallback."
+      : "Credentials saved in the operating system's native credential store.",
   };
 }
 
 export function reset(): unknown {
   deleteConfig();
   deleteSecrets();
-  return { ok: true, message: "Configuracion de ConnectWise eliminada." };
+  return { ok: true, message: "ConnectWise configuration removed." };
 }

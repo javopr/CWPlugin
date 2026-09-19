@@ -1,5 +1,6 @@
-import { request, requestAllPages } from "../cwClient.js";
+import { requestAllPages } from "../cwClient.js";
 import { loadContext } from "../context.js";
+import { resolveTicket } from "../ticketResolver.js";
 function toNote(raw) {
     return {
         id: raw.id,
@@ -13,11 +14,10 @@ function toNote(raw) {
 }
 export async function getTicket(ticketId) {
     const { config, secrets } = loadContext();
-    const raw = await request(config, secrets, {
-        path: `/service/tickets/${ticketId}`,
-    });
+    const resolved = await resolveTicket(config, secrets, ticketId);
+    const raw = resolved.raw;
     const rawNotes = await requestAllPages(config, secrets, {
-        path: `/service/tickets/${ticketId}/notes`,
+        path: resolved.notesPath,
     });
     const timeEntries = await requestAllPages(config, secrets, {
         path: "/time/entries",
@@ -29,7 +29,7 @@ export async function getTicket(ticketId) {
         company: raw.company?.name ?? raw.company?.identifier ?? "",
         status: raw.status?.name ?? "",
         board: raw.board?.name ?? "",
-        recordType: raw.recordType ?? "",
+        recordType: raw.recordType ?? resolved.chargeToType,
         initialDescription: raw.initialDescription,
         contact: raw.contact?.name,
         agreement: raw.agreement?.name,

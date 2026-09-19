@@ -9,7 +9,11 @@ const VALID_PUBLIC_KEY = "test-public-key";
 const VALID_PRIVATE_KEY = "test-private-key";
 const CODEBASE = "v2024_1/";
 
-const FIXTURE_TICKETS = [
+// ConnectWise stores Service Desk tickets and Project module tickets in two
+// genuinely separate resources — /service/tickets never returns project work
+// items, and /project/tickets records have no `recordType` field (they use
+// `isIssueFlag` instead). Verified against a real tenant.
+const FIXTURE_SERVICE_TICKETS = [
   {
     id: 1001,
     summary: "La impresora de la oficina no imprime",
@@ -17,14 +21,36 @@ const FIXTURE_TICKETS = [
     status: { name: "Open" },
     board: { name: "Service Board" },
     recordType: "ServiceTicket",
+    location: { id: 11 },
   },
+];
+
+// Tenant-wide work role list — a superset of what any single Location allows.
+const FIXTURE_WORK_ROLES = [
+  { id: 1, name: "Engineer", inactiveFlag: false },
+  { id: 2, name: "Manager", inactiveFlag: false },
+  { id: 3, name: "Old Role", inactiveFlag: true },
+];
+
+// ConnectWise restricts selectable work roles per ticket Location — verified
+// against a real tenant. This location only allows "Engineer" (plus an inactive
+// role that must be filtered out), deliberately missing "Manager" so tests can
+// prove ticket-scoped lookup differs from the tenant-wide list above.
+const FIXTURE_LOCATION_WORK_ROLES = {
+  11: [
+    { workRole: { id: 1, name: "Engineer" }, workRoleInactiveFlag: false },
+    { workRole: { id: 3, name: "Old Role" }, workRoleInactiveFlag: true },
+  ],
+};
+
+const FIXTURE_PROJECT_TICKETS = [
   {
     id: 1002,
     summary: "Migracion de servidor de archivos",
     company: { name: "Acme Corp", identifier: "acme" },
     status: { name: "In Progress" },
     board: { name: "Project Board" },
-    recordType: "ProjectTicket",
+    isIssueFlag: false,
   },
 ];
 
@@ -33,6 +59,7 @@ const FIXTURE_NOTES = {
     { id: 1, text: "Nota inicial: impresora sin respuesta.", detailDescriptionFlag: true, internalAnalysisFlag: false, resolutionFlag: false },
     { id: 2, text: "Se reinicio la impresora, sigue igual.", detailDescriptionFlag: false, internalAnalysisFlag: true, resolutionFlag: false },
   ],
+  1002: [],
 };
 
 function isAuthorized(req) {
@@ -49,38 +76,46 @@ function sendJson(res, status, body) {
   res.end(payload);
 }
 
+function matchesSingleClause(ticket, clause) {
+  const idMatch = clause.match(/^id=(\d+)$/);
+  if (idMatch) return ticket.id === Number(idMatch[1]);
+
+  const likeMatch = clause.match(/^(\S+) like '%(.*)%'$/);
+  if (likeMatch) {
+    const [, field, value] = likeMatch;
+    const actual = field
+      .split("/")
+      .reduce((obj, key) => (obj ? obj[key] : undefined), ticket);
+    return String(actual ?? "").toLowerCase().includes(value.toLowerCase());
+  }
+
+  const containsMatch = clause.match(/^(\S+) contains '(.*)'$/);
+  if (containsMatch) {
+    const [, field, value] = containsMatch;
+    const actual = field
+      .split("/")
+      .reduce((obj, key) => (obj ? obj[key] : undefined), ticket);
+    return String(actual ?? "").toLowerCase().includes(value.toLowerCase());
+  }
+
+  const eqMatch = clause.match(/^(\S+)='(.*)'$/);
+  if (eqMatch) {
+    const [, field, value] = eqMatch;
+    return ticket[field] === value;
+  }
+
+  return true;
+}
+
 function matchesConditions(ticket, conditions) {
   if (!conditions) return true;
   const clauses = conditions.split(" and ");
   return clauses.every((clause) => {
-    const idMatch = clause.match(/^id=(\d+)$/);
-    if (idMatch) return ticket.id === Number(idMatch[1]);
-
-    const likeMatch = clause.match(/^(\S+) like '%(.*)%'$/);
-    if (likeMatch) {
-      const [, field, value] = likeMatch;
-      const actual = field
-        .split("/")
-        .reduce((obj, key) => (obj ? obj[key] : undefined), ticket);
-      return String(actual ?? "").toLowerCase().includes(value.toLowerCase());
+    const orGroup = clause.match(/^\((.+)\)$/);
+    if (orGroup) {
+      return orGroup[1].split(" or ").some((sub) => matchesSingleClause(ticket, sub));
     }
-
-    const containsMatch = clause.match(/^(\S+) contains '(.*)'$/);
-    if (containsMatch) {
-      const [, field, value] = containsMatch;
-      const actual = field
-        .split("/")
-        .reduce((obj, key) => (obj ? obj[key] : undefined), ticket);
-      return String(actual ?? "").toLowerCase().includes(value.toLowerCase());
-    }
-
-    const eqMatch = clause.match(/^(\S+)='(.*)'$/);
-    if (eqMatch) {
-      const [, field, value] = eqMatch;
-      return ticket[field] === value;
-    }
-
-    return true;
+    return matchesSingleClause(ticket, clause);
   });
 }
 
@@ -111,17 +146,19 @@ export function startMockServer() {
       return;
     }
 
-    if (logicalPath === "/service/tickets") {
+    if (logicalPath === "/service/tickets" || logicalPath === "/project/tickets") {
+      const fixture = logicalPath === "/service/tickets" ? FIXTURE_SERVICE_TICKETS : FIXTURE_PROJECT_TICKETS;
       const conditions = url.searchParams.get("conditions");
       const page = Number(url.searchParams.get("page") || "1");
-      const filtered = FIXTURE_TICKETS.filter((t) => matchesConditions(t, conditions));
+      const filtered = fixture.filter((t) => matchesConditions(t, conditions));
       sendJson(res, 200, page === 1 ? filtered : []);
       return;
     }
 
-    const ticketMatch = logicalPath.match(/^\/service\/tickets\/(\d+)$/);
+    const ticketMatch = logicalPath.match(/^\/(service|project)\/tickets\/(\d+)$/);
     if (ticketMatch) {
-      const ticket = FIXTURE_TICKETS.find((t) => t.id === Number(ticketMatch[1]));
+      const fixture = ticketMatch[1] === "service" ? FIXTURE_SERVICE_TICKETS : FIXTURE_PROJECT_TICKETS;
+      const ticket = fixture.find((t) => t.id === Number(ticketMatch[2]));
       if (!ticket) {
         sendJson(res, 404, { message: "not found" });
         return;
@@ -130,11 +167,25 @@ export function startMockServer() {
       return;
     }
 
-    const notesMatch = logicalPath.match(/^\/service\/tickets\/(\d+)\/notes$/);
+    const notesMatch = logicalPath.match(/^\/(service|project)\/tickets\/(\d+)\/notes$/);
     if (notesMatch) {
       const page = Number(url.searchParams.get("page") || "1");
-      const notes = FIXTURE_NOTES[Number(notesMatch[1])] || [];
+      const notes = FIXTURE_NOTES[Number(notesMatch[2])] || [];
       sendJson(res, 200, page === 1 ? notes : []);
+      return;
+    }
+
+    if (logicalPath === "/time/workRoles") {
+      const page = Number(url.searchParams.get("page") || "1");
+      sendJson(res, 200, page === 1 ? FIXTURE_WORK_ROLES : []);
+      return;
+    }
+
+    const locationRolesMatch = logicalPath.match(/^\/system\/locations\/(\d+)\/workroles$/);
+    if (locationRolesMatch) {
+      const page = Number(url.searchParams.get("page") || "1");
+      const roles = FIXTURE_LOCATION_WORK_ROLES[Number(locationRolesMatch[1])] || [];
+      sendJson(res, 200, page === 1 ? roles : []);
       return;
     }
 

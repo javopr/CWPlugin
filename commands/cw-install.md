@@ -41,31 +41,39 @@ nueva ni reiniciar nada, ni siquiera justo después de instalar Node en este mis
    ahí sí pídele que confirme que la instalación terminó bien o que abra una sesión
    nueva.
 
-## Paso 1 — configurar credenciales (modo recomendado: en su propia terminal)
+## Paso 1 — configurar credenciales (modo recomendado: dictando en el chat)
 
-Por defecto, **no pidas las llaves de la API en este chat**. Dile al usuario que abra
-una terminal (PowerShell/Terminal/Bash) él mismo y corra el wrapper correspondiente:
-
-- Windows: `powershell -File "${CLAUDE_PLUGIN_ROOT}\scripts\run.ps1" configure`
-- macOS/Linux: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" configure`
-
-Esto lo lleva por un asistente interactivo que pregunta FQDN, Company ID, Client ID,
-Public Key y Private Key uno por uno — las llaves no se muestran en pantalla mientras
-las escribe, y nada de esto pasa por la conversación con Claude. Explícale que esto es
-justamente para que sus credenciales nunca queden expuestas en el chat.
-
-Cuando el usuario te confirme que terminó, corre el subcomando `test-connection` con
-el wrapper para verificar que quedó bien configurado, y repórtale el resultado.
-
-### Alternativa (si el usuario prefiere dictarte los datos en el chat)
-
-Solo si el usuario te pide explícitamente hacerlo así (por ejemplo, porque no tiene
-fácil acceso a una terminal):
+Por defecto, pide los cinco datos uno por uno en conversación normal (FQDN, Company
+ID, Client ID, Public Key, Private Key):
 
 1. Pide los cinco datos uno por uno en conversación normal.
 2. Nunca repitas ni muestres las llaves completas de vuelta al usuario en el chat.
 3. Invoca el subcomando `configure` del wrapper con `--json-args '{...}'` y esos cinco
    campos.
+
+Cuando termines, corre el subcomando `test-connection` con el wrapper para verificar
+que quedó bien configurado, y repórtale el resultado.
+
+### Alternativa más segura (si el usuario prefiere que las llaves nunca pasen por el chat)
+
+Si el usuario te dice que prefiere no dictar las llaves en la conversación, indícale
+que puede configurarlo él mismo desde una terminal — así ni la Public Key ni la
+Private Key pasan por el chat en ningún momento:
+
+1. Dile la ruta exacta de la carpeta `scripts` del plugin. Esa ruta es el valor de la
+   variable de entorno `${CLAUDE_PLUGIN_ROOT}` en tu sesión actual — resuélvela y
+   dísela tal cual (ej. `C:\Users\...\claude\plugins\cwplugin\scripts` o
+   `~/.claude/plugins/cwplugin/scripts`), para que no tenga que "encontrarla" a
+   ciegas.
+2. Dile que abra una terminal (PowerShell/Terminal/Bash) y navegue a esa carpeta
+   (`cd "<ruta>"`), y corra:
+   - Windows: `.\run.ps1 configure`
+   - macOS/Linux: `./run.sh configure`
+3. Esto lo lleva por un asistente interactivo que pregunta los cinco datos uno por
+   uno — la Private Key no se muestra en pantalla mientras la escribe, y nada de esto
+   pasa por la conversación con Claude.
+4. Cuando el usuario te confirme que terminó, corre `test-connection` con el wrapper
+   para verificar que quedó bien configurado, y repórtale el resultado.
 
 ### En ambos casos
 

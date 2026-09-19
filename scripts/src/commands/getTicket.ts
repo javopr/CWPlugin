@@ -1,5 +1,6 @@
-import { request, requestAllPages } from "../cwClient.js";
+import { requestAllPages } from "../cwClient.js";
 import { loadContext } from "../context.js";
+import { resolveTicket } from "../ticketResolver.js";
 import type { TicketDetail, TicketNote } from "../types.js";
 
 interface RawTicket {
@@ -9,6 +10,7 @@ interface RawTicket {
   status?: { name?: string };
   board?: { name?: string };
   recordType?: string;
+  isIssueFlag?: boolean;
   initialDescription?: string;
   contact?: { name?: string };
   agreement?: { name?: string };
@@ -39,12 +41,11 @@ function toNote(raw: RawNote): TicketNote {
 export async function getTicket(ticketId: number): Promise<unknown> {
   const { config, secrets } = loadContext();
 
-  const raw = await request<RawTicket>(config, secrets, {
-    path: `/service/tickets/${ticketId}`,
-  });
+  const resolved = await resolveTicket<RawTicket>(config, secrets, ticketId);
+  const raw = resolved.raw;
 
   const rawNotes = await requestAllPages<RawNote>(config, secrets, {
-    path: `/service/tickets/${ticketId}/notes`,
+    path: resolved.notesPath,
   });
 
   const timeEntries = await requestAllPages<unknown>(config, secrets, {
@@ -58,7 +59,7 @@ export async function getTicket(ticketId: number): Promise<unknown> {
     company: raw.company?.name ?? raw.company?.identifier ?? "",
     status: raw.status?.name ?? "",
     board: raw.board?.name ?? "",
-    recordType: raw.recordType ?? "",
+    recordType: raw.recordType ?? resolved.chargeToType,
     initialDescription: raw.initialDescription,
     contact: raw.contact?.name,
     agreement: raw.agreement?.name,
