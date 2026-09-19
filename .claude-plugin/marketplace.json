@@ -1,0 +1,14 @@
+{
+  "name": "cwplugin-marketplace",
+  "owner": {
+    "name": "Javier",
+    "email": "javopr@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "cwplugin",
+      "source": "./",
+      "description": "Busca tickets de ConnectWise Manage y registra entradas de tiempo directamente desde una conversacion de Claude Code."
+    }
+  ]
+}

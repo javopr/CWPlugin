@@ -1,0 +1,18 @@
+{
+  "name": "cwplugin-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI de soporte para el plugin de Claude Code cwplugin (ConnectWise Manage).",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test ../test/cli.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}
