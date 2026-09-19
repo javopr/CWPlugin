@@ -115,3 +115,28 @@ fixed" format, usually quoting the user's own words that surfaced the bug. This 
 deliberate: it's the primary way a fresh Claude Code session (e.g., on a different
 machine) picks up the reasoning behind non-obvious past decisions, since conversation
 history and Claude's memory don't travel with the git repo.
+
+## Keeping this repo the single source of truth
+
+The user works on this project from multiple machines and expects full continuity
+between them regardless of which one they're on. Claude Code's conversation history
+and its local memory are per-machine and do **not** sync — the git repo is the only
+thing that does. So: **whenever a working convention, behavioral rule, or non-obvious
+decision changes, write it into this file, `skills/connectwise/SKILL.md`, or
+`docs/CHANGELOG.md` in the same session it changes — don't rely on remembering it
+for next time.** Concretely:
+
+- A rule about *how the CLI/API behaves* (a ConnectWise quirk, a new endpoint, a
+  verified field) → `skills/connectwise/reference.md` and/or
+  `docs/v<current>/CONNECTWISE-API.md`.
+- A rule about *how Claude should behave when using the skill* (how to present
+  choices, what to ask before doing, thresholds like the 100-note cutoff) →
+  `skills/connectwise/SKILL.md`.
+- A rule about *how to work in this repo itself* (build/test steps, architecture
+  facts, cross-cutting gotchas) → this file.
+- A bug and its fix, with what surfaced it → `docs/CHANGELOG.md`.
+
+If a user preference doesn't fit any of those (e.g., "run tests before saying
+something is done") it's likely already covered by Claude Code's own default
+behavior and doesn't need repo-level codification — only project-specific
+conventions need to live here.
