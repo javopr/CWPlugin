@@ -27,7 +27,7 @@ los enlaces de abajo apuntan a la versión vigente, v1.1.2):
 
 El mecanismo exacto depende de dónde uses Claude (app de escritorio, VS Code, o el
 CLI de terminal) — ver la [guía de instalación completa](docs/v1.1.2/INSTALL.md) con los
-pasos verificados para cada uno. Resumen para el CLI de terminal:
+pasos verificados para cada uno.
 
 
 ## Uso
