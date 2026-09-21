@@ -29,33 +29,6 @@ El mecanismo exacto depende de dónde uses Claude (app de escritorio, VS Code, o
 CLI de terminal) — ver la [guía de instalación completa](docs/v1.1.2/INSTALL.md) con los
 pasos verificados para cada uno. Resumen para el CLI de terminal:
 
-```
-claude plugin marketplace add javopr/CWPlugin
-claude plugin install cwplugin@cwplugin-marketplace
-```
-
-Luego, dentro de cualquier sesión de Claude Code:
-
-```
-/cw-install
-```
-
-Te pedirá el FQDN, Company ID, Client ID y las llaves de la API. Las llaves se guardan
-en el almacén de credenciales nativo del sistema operativo (Windows: DPAPI: macOS:
-Keychain; Linux: `secret-tool`/libsecret, con un archivo local de respaldo si no está
-disponible) — nunca se te pedirá un passphrase, y la configuración sobrevive reinicios
-de la máquina.
-
-Si prefieres no dictarle las llaves a Claude en el chat, puedes correr la configuración
-tú mismo en una terminal — el wrapper encuentra Node.js automáticamente aunque acabe de
-instalarse (no depende del PATH de la terminal, así que no hace falta abrir una nueva
-ni reiniciar nada):
-
-- Windows (PowerShell): `powershell -File .\scripts\run.ps1 configure`
-- macOS/Linux: `bash ./scripts/run.sh configure`
-
-Te va preguntando cada dato uno por uno; las llaves no se muestran en pantalla
-mientras las escribes.
 
 ## Uso
 
